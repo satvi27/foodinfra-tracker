@@ -34,15 +34,11 @@ if uploaded_file:
 
     st.write("### Preview of Uploaded Data", df.head())
 
-    # -------------------
     # Prepare numeric data for clustering & analysis
-    # -------------------
     X_numeric = df.select_dtypes(include=np.number).fillna(0)
     y = df.iloc[:, -1]
 
-    # -------------------
     # 3D Clustering
-    # -------------------
     if X_numeric.shape[1] >= 3:
         kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
         df["Cluster"] = kmeans.fit_predict(X_numeric)
@@ -64,9 +60,7 @@ if uploaded_file:
     else:
         st.warning("Dataset must have at least 3 numeric columns for 3D clustering.")
 
-    # -------------------
     # Classification (Decision Tree + Logistic Regression)
-    # -------------------
     if pd.api.types.is_numeric_dtype(y) and X_numeric.shape[1] > 0:
         labels = ["Low", "Medium", "High"]
         try:
@@ -93,9 +87,7 @@ if uploaded_file:
     else:
         st.warning("Target column must be numeric for classification.")
 
-    # -------------------
     # Correlation Heatmap
-    # -------------------
     if X_numeric.shape[1] > 0:
         fig3, ax3 = plt.subplots()
         sns.heatmap(X_numeric.corr(), annot=True, cmap="coolwarm", ax=ax3)
@@ -105,35 +97,41 @@ if uploaded_file:
         st.warning("No numeric columns available for correlation heatmap.")
 
 # -------------------
-# Upload External Document (TXT, DOCX, PDF) for Market/Yield Analysis
+# Helper function to extract text from different file types
 # -------------------
-st.header("Upload External Document for Market/Yield Analysis")
-doc_file = st.file_uploader("Upload a document (TXT, DOCX, PDF)", type=["txt", "docx", "pdf"])
-
-if doc_file:
+def extract_text(file):
     text = ""
-
-    if doc_file.name.endswith(".txt"):
-        text = doc_file.read().decode("utf-8")
-    elif doc_file.name.endswith(".docx"):
-        doc = docx.Document(doc_file)
+    if file.name.endswith(".txt"):
+        text = file.read().decode("utf-8")
+    elif file.name.endswith(".docx"):
+        doc = docx.Document(file)
         text = "\n".join([p.text for p in doc.paragraphs])
-    elif doc_file.name.endswith(".pdf"):
-        pdf = PdfReader(doc_file)
+    elif file.name.endswith(".pdf"):
+        pdf = PdfReader(file)
         for page in pdf.pages:
             page_text = page.extract_text()
             if page_text:
                 text += page_text
+    return text
 
-    st.write("### Extracted Text from Document:")
-    st.text_area("Preview", text[:1000], height=200)
+# -------------------
+# Market Access Section
+# -------------------
+st.header("Market Access")
+market_file = st.file_uploader("Upload Market Access document", type=["txt", "docx", "pdf"], key="market")
 
-    # Keyword-based analysis
-    keywords = ["market", "access", "agriculture", "yield", "production", "infrastructure"]
-    counts = {k: text.lower().count(k) for k in keywords}
+if market_file:
+    market_text = extract_text(market_file)
+    st.subheader("Market Access Details from Document")
+    st.text_area("Market Access Content", market_text, height=400)
 
-    fig4, ax4 = plt.subplots()
-    ax4.bar(counts.keys(), counts.values(), color="green")
-    ax4.set_title("Keyword Frequency in Document (Market Access / Agricultural Yield)")
-    ax4.set_ylabel("Count")
-    st.pyplot(fig4)
+# -------------------
+# Agricultural Yield Section
+# -------------------
+st.header("Agricultural Yield")
+yield_file = st.file_uploader("Upload Agricultural Yield document", type=["txt", "docx", "pdf"], key="yield")
+
+if yield_file:
+    yield_text = extract_text(yield_file)
+    st.subheader("Agricultural Yield Details from Document")
+    st.text_area("Agricultural Yield Content", yield_text, height=400)
