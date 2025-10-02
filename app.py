@@ -24,6 +24,7 @@ st.header("Main Dataset")
 uploaded_file = st.file_uploader("Upload your main dataset (CSV/Excel)", type=["csv", "xlsx"], key="main_dataset")
 
 if uploaded_file:
+    # Load dataset
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
@@ -31,34 +32,40 @@ if uploaded_file:
 
     st.write("### Dataset Preview", df.head())
 
-    # 3D Clustering (needs at least 3 numeric columns)
+    # Ensure numeric columns exist
     numeric_cols = df.select_dtypes(include='number')
-    if numeric_cols.shape[1] >= 3:
-        kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-        df["Cluster"] = kmeans.fit_predict(numeric_cols.iloc[:, :3])
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-        ax.scatter(numeric_cols.iloc[:,0], numeric_cols.iloc[:,1], numeric_cols.iloc[:,2], c=df["Cluster"], cmap="viridis")
-        ax.set_xlabel(numeric_cols.columns[0])
-        ax.set_ylabel(numeric_cols.columns[1])
-        ax.set_zlabel(numeric_cols.columns[2])
-        ax.set_title("3D Clustering")
-        st.pyplot(fig)
+    if numeric_cols.shape[1] < 2:
+        st.info("Need at least 2 numeric columns for classification/clustering.")
     else:
-        st.info("Need at least 3 numeric columns for 3D clustering.")
+        # -------------------
+        # 3D Clustering
+        # -------------------
+        if numeric_cols.shape[1] >= 3:
+            kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+            df["Cluster"] = kmeans.fit_predict(numeric_cols.iloc[:, :3])
 
-    # -------------------
-    # Classification
-    # -------------------
-    try:
-        # Automatically pick last numeric column as target
-        numeric_cols = df.select_dtypes(include='number')
-        if numeric_cols.shape[1] >= 2:
-            X = numeric_cols.iloc[:, :-1]  # features
-            y_numeric = numeric_cols.iloc[:, -1]  # target numeric column
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+            ax.scatter(numeric_cols.iloc[:,0], numeric_cols.iloc[:,1], numeric_cols.iloc[:,2], c=df["Cluster"], cmap="viridis")
+            ax.set_xlabel(numeric_cols.columns[0])
+            ax.set_ylabel(numeric_cols.columns[1])
+            ax.set_zlabel(numeric_cols.columns[2])
+            ax.set_title("3D Clustering")
+            st.pyplot(fig)
+        else:
+            st.info("Need at least 3 numeric columns for 3D clustering.")
 
-            # Convert target numeric into categories
+        # -------------------
+        # Classification
+        # -------------------
+        try:
+            # Features: all numeric except last column
+            X = numeric_cols.iloc[:, :-1]
+            if isinstance(X, pd.Series):
+                X = X.to_frame()
+            y_numeric = numeric_cols.iloc[:, -1]
+
+            # Convert numeric target into categories
             labels = ["Low", "Medium", "High"]
             y = pd.qcut(y_numeric, q=3, labels=labels)
 
@@ -66,16 +73,17 @@ if uploaded_file:
 
             # Decision Tree
             tree = DecisionTreeClassifier().fit(X_train, y_train)
-            acc = accuracy_score(y_test, tree.predict(X_test))
-            st.write("### Decision Tree Accuracy:", round(acc, 2))
+            acc_tree = accuracy_score(y_test, tree.predict(X_test))
+            st.write("### Decision Tree Accuracy:", round(acc_tree, 2))
 
             # Logistic Regression
-            logistic = LogisticRegression(max_iter=500).fit(X_train, y_train.cat.codes)
-            preds = logistic.predict(X_test.cat.codes if hasattr(X_test, 'cat') else y_test.cat.codes)
+            logistic = LogisticRegression(max_iter=500)
+            logistic.fit(X_train, y_train.cat.codes)
+            preds = logistic.predict(X_test)
             cm = confusion_matrix(y_test.cat.codes, preds)
             fig2, ax2 = plt.subplots()
-            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax2)
-            ax2.set_title("Confusion Matrix")
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels, ax=ax2)
+            ax2.set_title("Confusion Matrix (Logistic Regression)")
             st.pyplot(fig2)
 
             # Correlation Heatmap
@@ -83,11 +91,9 @@ if uploaded_file:
             sns.heatmap(numeric_cols.corr(), annot=True, cmap="coolwarm", ax=ax3)
             ax3.set_title("Correlation Heatmap")
             st.pyplot(fig3)
-        else:
-            st.info("Not enough numeric columns for classification.")
 
-    except Exception as e:
-        st.info(f"Classification error: {e}")
+        except Exception as e:
+            st.info(f"Classification error: {e}")
 
 # -------------------
 # Helper functions for Market Access / Agricultural Yield
