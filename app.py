@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,7 +6,6 @@ from io import BytesIO
 import docx
 from PyPDF2 import PdfReader
 import camelot
-import re
 
 st.title("Food Infrastructure Tracker")
 
@@ -26,13 +26,13 @@ def extract_text_from_pdf(file):
     return text
 
 def extract_table_from_pdf(file):
-    # Try lattice and stream flavor
+    # Try lattice first, then stream flavor
     tables = camelot.read_pdf(file, pages='1-end', flavor='lattice')
     if not tables or len(tables) == 0:
         tables = camelot.read_pdf(file, pages='1-end', flavor='stream')
     if tables and len(tables) > 0:
         df = tables[0].df
-        # Try converting numeric columns
+        # Clean numeric columns
         for col in df.columns:
             df[col] = pd.to_numeric(df[col].str.replace(r'[^\d.]','', regex=True), errors='coerce')
         return df
@@ -70,7 +70,7 @@ st.header("Market Access")
 market_file = st.file_uploader("Upload Market Access document (PDF/DOCX/TXT)", key="market")
 
 if market_file:
-    # Display text
+    # Display text content
     if market_file.name.endswith(".pdf"):
         market_text = extract_text_from_pdf(market_file)
     elif market_file.name.endswith(".docx"):
@@ -78,7 +78,7 @@ if market_file:
     else:
         market_text = market_file.read().decode("utf-8")
     st.subheader("Market Access Content")
-    st.text_area("Content", market_text, height=400)
+    st.text_area("Content", market_text, height=400, key="market_content")
 
     # Extract table and show graph
     market_file.seek(0)
@@ -107,7 +107,7 @@ if yield_file:
     else:
         yield_text = yield_file.read().decode("utf-8")
     st.subheader("Agricultural Yield Content")
-    st.text_area("Content", yield_text, height=400)
+    st.text_area("Content", yield_text, height=400, key="yield_content")
 
     # Extract table and show graph
     yield_file.seek(0)
