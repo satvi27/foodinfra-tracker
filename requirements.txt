@@ -7,3 +7,4 @@ seaborn
 python-docx
 PyPDF2
 openpyxl
+camelot-py[cv]
