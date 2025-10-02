@@ -6,3 +6,4 @@ scikit-learn
 seaborn
 python-docx
 PyPDF2
+openpyxl
