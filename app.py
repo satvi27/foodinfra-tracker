@@ -30,48 +30,73 @@ if uploaded_file:
 
     st.write("### Preview of Uploaded Data", df.head())
 
-    # Assume last column is Target
-    X = df.iloc[:, :-1]
+    # -------------------
+    # Prepare numeric data for clustering
+    # -------------------
+    X_numeric = df.select_dtypes(include=np.number).fillna(0)
+
+    if X_numeric.shape[1] < 3:
+        st.warning("Dataset must have at least 3 numeric columns for 3D clustering.")
+    else:
+        # KMeans clustering
+        kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+        df["Cluster"] = kmeans.fit_predict(X_numeric)
+
+        fig1 = plt.figure()
+        ax = fig1.add_subplot(111, projection="3d")
+        ax.scatter(
+            X_numeric.iloc[:, 0],
+            X_numeric.iloc[:, 1],
+            X_numeric.iloc[:, 2],
+            c=df["Cluster"],
+            cmap="viridis"
+        )
+        ax.set_xlabel(X_numeric.columns[0])
+        ax.set_ylabel(X_numeric.columns[1])
+        ax.set_zlabel(X_numeric.columns[2])
+        ax.set_title("3D Clustering Result")
+        st.pyplot(fig1)
+
+    # -------------------
+    # Supervised classification (Decision Tree + Logistic Regression)
+    # -------------------
+    # Use last column as target if numeric
     y = df.iloc[:, -1]
+    X_train, X_test, y_train, y_test = None, None, None, None
 
-    # KMeans clustering
-    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-    df["Cluster"] = kmeans.fit_predict(X)
+    if pd.api.types.is_numeric_dtype(y):
+        labels = ["Low", "Medium", "High"]
+        try:
+            y_bins = pd.qcut(y, q=len(labels), labels=labels)
+        except Exception:
+            y_bins = pd.cut(y, bins=len(labels), labels=labels)
 
-    fig1 = plt.figure()
-    ax = fig1.add_subplot(111, projection="3d")
-    ax.scatter(X.iloc[:, 0], X.iloc[:, 1], X.iloc[:, 2], c=df["Cluster"], cmap="viridis")
-    ax.set_xlabel(X.columns[0]); ax.set_ylabel(X.columns[1]); ax.set_zlabel(X.columns[2])
-    ax.set_title("3D Clustering Result")
-    st.pyplot(fig1)
+        X_train, X_test, y_train, y_test = train_test_split(X_numeric, y_bins, test_size=0.3, random_state=42)
 
-    # Train/test for supervised models
-    labels = ["Low", "Medium", "High"]
-    try:
-        y_bins = pd.qcut(y, q=len(labels), labels=labels)
-    except Exception:
-        y_bins = pd.cut(y, bins=len(labels), labels=labels)
-    X_train, X_test, y_train, y_test = train_test_split(X, y_bins, test_size=0.3, random_state=42)
+        # Decision Tree
+        tree = DecisionTreeClassifier().fit(X_train, y_train)
+        acc = accuracy_score(y_test, tree.predict(X_test))
+        st.write("### Decision Tree Accuracy:", round(acc, 2))
 
-    # Decision Tree
-    tree = DecisionTreeClassifier().fit(X_train, y_train)
-    acc = accuracy_score(y_test, tree.predict(X_test))
-    st.write("### Decision Tree Accuracy:", round(acc, 2))
+        # Logistic Regression + confusion matrix
+        logistic = LogisticRegression(max_iter=500).fit(X_train, y_train.cat.codes)
+        preds = logistic.predict(X_test)
+        cm = confusion_matrix(y_test.cat.codes, preds)
 
-    # Logistic Regression + confusion matrix
-    logistic = LogisticRegression(max_iter=500).fit(X_train, y_train.cat.codes)
-    preds = logistic.predict(X_test)
-    cm = confusion_matrix(y_test.cat.codes, preds)
+        fig2, ax2 = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels, ax=ax2)
+        ax2.set_title("Confusion Matrix")
+        st.pyplot(fig2)
 
-    fig2, ax2 = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels, ax=ax2)
-    ax2.set_title("Confusion Matrix")
-    st.pyplot(fig2)
+    else:
+        st.warning("Target column must be numeric for classification.")
 
+    # -------------------
     # Correlation Heatmap
+    # -------------------
     fig3, ax3 = plt.subplots()
-    sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax3)
-    ax3.set_title("Correlation Heatmap (Feature Relationships)")
+    sns.heatmap(X_numeric.corr(), annot=True, cmap="coolwarm", ax=ax3)
+    ax3.set_title("Correlation Heatmap (Numeric Features)")
     st.pyplot(fig3)
 
 # -------------------
@@ -91,16 +116,17 @@ if doc_file:
     elif doc_file.name.endswith(".pdf"):
         pdf = PdfReader(doc_file)
         for page in pdf.pages:
-            text += page.extract_text()
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
 
     st.write("### Extracted Text from Document:")
     st.text_area("Preview", text[:1000], height=200)
 
-    # Example: Keyword-based analysis
+    # Keyword-based analysis
     keywords = ["market", "access", "agriculture", "yield", "production", "infrastructure"]
     counts = {k: text.lower().count(k) for k in keywords}
 
-    # Plot graph
     fig4, ax4 = plt.subplots()
     ax4.bar(counts.keys(), counts.values(), color="green")
     ax4.set_title("Keyword Frequency in Document (Market Access / Agricultural Yield)")
