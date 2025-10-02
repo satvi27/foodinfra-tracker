@@ -12,6 +12,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 import seaborn as sns
 import docx
 from PyPDF2 import PdfReader
+from io import StringIO
 
 st.title("Food Infrastructure Tracker")
 
@@ -22,7 +23,6 @@ st.header("Upload Dataset")
 uploaded_file = st.file_uploader("Upload your dataset (CSV or Excel)", type=["csv", "xlsx"])
 
 if uploaded_file:
-    # Load dataset
     try:
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
@@ -34,7 +34,6 @@ if uploaded_file:
 
     st.write("### Preview of Uploaded Data", df.head())
 
-    # Prepare numeric data for clustering & analysis
     X_numeric = df.select_dtypes(include=np.number).fillna(0)
     y = df.iloc[:, -1]
 
@@ -60,7 +59,7 @@ if uploaded_file:
     else:
         st.warning("Dataset must have at least 3 numeric columns for 3D clustering.")
 
-    # Classification (Decision Tree + Logistic Regression)
+    # Classification
     if pd.api.types.is_numeric_dtype(y) and X_numeric.shape[1] > 0:
         labels = ["Low", "Medium", "High"]
         try:
@@ -70,12 +69,10 @@ if uploaded_file:
 
         X_train, X_test, y_train, y_test = train_test_split(X_numeric, y_bins, test_size=0.3, random_state=42)
 
-        # Decision Tree
         tree = DecisionTreeClassifier().fit(X_train, y_train)
         acc = accuracy_score(y_test, tree.predict(X_test))
         st.write("### Decision Tree Accuracy:", round(acc, 2))
 
-        # Logistic Regression + confusion matrix
         logistic = LogisticRegression(max_iter=500).fit(X_train, y_train.cat.codes)
         preds = logistic.predict(X_test)
         cm = confusion_matrix(y_test.cat.codes, preds)
@@ -97,7 +94,7 @@ if uploaded_file:
         st.warning("No numeric columns available for correlation heatmap.")
 
 # -------------------
-# Helper function to extract text from different file types
+# Helper functions to extract text and table
 # -------------------
 def extract_text(file):
     text = ""
@@ -114,6 +111,16 @@ def extract_text(file):
                 text += page_text
     return text
 
+def extract_table_from_text(text):
+    """
+    Convert tabular text to DataFrame if possible
+    """
+    try:
+        df_table = pd.read_csv(StringIO(text), delim_whitespace=True)
+        return df_table
+    except Exception:
+        return None
+
 # -------------------
 # Market Access Section
 # -------------------
@@ -125,6 +132,18 @@ if market_file:
     st.subheader("Market Access Details from Document")
     st.text_area("Market Access Content", market_text, height=400)
 
+    # Try to extract table and plot
+    df_market = extract_table_from_text(market_text)
+    if df_market is not None:
+        numeric_cols = df_market.select_dtypes(include=np.number)
+        if not numeric_cols.empty:
+            st.subheader("Market Access Graphs")
+            st.bar_chart(numeric_cols)
+        else:
+            st.info("No numeric data found in Market Access document for graph.")
+    else:
+        st.info("Could not detect tabular data in Market Access document.")
+
 # -------------------
 # Agricultural Yield Section
 # -------------------
@@ -135,3 +154,15 @@ if yield_file:
     yield_text = extract_text(yield_file)
     st.subheader("Agricultural Yield Details from Document")
     st.text_area("Agricultural Yield Content", yield_text, height=400)
+
+    # Try to extract table and plot
+    df_yield = extract_table_from_text(yield_text)
+    if df_yield is not None:
+        numeric_cols = df_yield.select_dtypes(include=np.number)
+        if not numeric_cols.empty:
+            st.subheader("Agricultural Yield Graphs")
+            st.bar_chart(numeric_cols)
+        else:
+            st.info("No numeric data found in Agricultural Yield document for graph.")
+    else:
+        st.info("Could not detect tabular data in Agricultural Yield document.")
