@@ -48,37 +48,46 @@ if uploaded_file:
     else:
         st.info("Need at least 3 numeric columns for 3D clustering.")
 
+    # -------------------
     # Classification
+    # -------------------
     try:
-        X = df.iloc[:, :-1]
-        y = df.iloc[:, -1]
+        # Automatically pick last numeric column as target
+        numeric_cols = df.select_dtypes(include='number')
+        if numeric_cols.shape[1] >= 2:
+            X = numeric_cols.iloc[:, :-1]  # features
+            y_numeric = numeric_cols.iloc[:, -1]  # target numeric column
 
-        # Convert target to numeric codes if not numeric
-        if y.dtype == 'object':
-            y = y.astype('category').cat.codes
+            # Convert target numeric into categories
+            labels = ["Low", "Medium", "High"]
+            y = pd.qcut(y_numeric, q=3, labels=labels)
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-        tree = DecisionTreeClassifier().fit(X_train, y_train)
-        acc = accuracy_score(y_test, tree.predict(X_test))
-        st.write("### Decision Tree Accuracy:", round(acc, 2))
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-        logistic = LogisticRegression(max_iter=500).fit(X_train, y_train)
-        preds = logistic.predict(X_test)
-        cm = confusion_matrix(y_test, preds)
-        fig2, ax2 = plt.subplots()
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax2)
-        ax2.set_title("Confusion Matrix")
-        st.pyplot(fig2)
+            # Decision Tree
+            tree = DecisionTreeClassifier().fit(X_train, y_train)
+            acc = accuracy_score(y_test, tree.predict(X_test))
+            st.write("### Decision Tree Accuracy:", round(acc, 2))
+
+            # Logistic Regression
+            logistic = LogisticRegression(max_iter=500).fit(X_train, y_train.cat.codes)
+            preds = logistic.predict(X_test.cat.codes if hasattr(X_test, 'cat') else y_test.cat.codes)
+            cm = confusion_matrix(y_test.cat.codes, preds)
+            fig2, ax2 = plt.subplots()
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax2)
+            ax2.set_title("Confusion Matrix")
+            st.pyplot(fig2)
+
+            # Correlation Heatmap
+            fig3, ax3 = plt.subplots()
+            sns.heatmap(numeric_cols.corr(), annot=True, cmap="coolwarm", ax=ax3)
+            ax3.set_title("Correlation Heatmap")
+            st.pyplot(fig3)
+        else:
+            st.info("Not enough numeric columns for classification.")
 
     except Exception as e:
-        st.info(f"Classification error. Make sure the target column is numeric or categorical. Details: {e}")
-
-    # Correlation Heatmap
-    if numeric_cols.shape[1] >= 2:
-        fig3, ax3 = plt.subplots()
-        sns.heatmap(numeric_cols.corr(), annot=True, cmap="coolwarm", ax=ax3)
-        ax3.set_title("Correlation Heatmap")
-        st.pyplot(fig3)
+        st.info(f"Classification error: {e}")
 
 # -------------------
 # Helper functions for Market Access / Agricultural Yield
