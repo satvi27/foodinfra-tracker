@@ -23,22 +23,27 @@ uploaded_file = st.file_uploader("Upload your dataset (CSV or Excel)", type=["cs
 
 if uploaded_file:
     # Load dataset
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        st.stop()
 
     st.write("### Preview of Uploaded Data", df.head())
 
     # -------------------
-    # Prepare numeric data for clustering
+    # Prepare numeric data for clustering & analysis
     # -------------------
     X_numeric = df.select_dtypes(include=np.number).fillna(0)
+    y = df.iloc[:, -1]
 
-    if X_numeric.shape[1] < 3:
-        st.warning("Dataset must have at least 3 numeric columns for 3D clustering.")
-    else:
-        # KMeans clustering
+    # -------------------
+    # 3D Clustering
+    # -------------------
+    if X_numeric.shape[1] >= 3:
         kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
         df["Cluster"] = kmeans.fit_predict(X_numeric)
 
@@ -56,15 +61,13 @@ if uploaded_file:
         ax.set_zlabel(X_numeric.columns[2])
         ax.set_title("3D Clustering Result")
         st.pyplot(fig1)
+    else:
+        st.warning("Dataset must have at least 3 numeric columns for 3D clustering.")
 
     # -------------------
-    # Supervised classification (Decision Tree + Logistic Regression)
+    # Classification (Decision Tree + Logistic Regression)
     # -------------------
-    # Use last column as target if numeric
-    y = df.iloc[:, -1]
-    X_train, X_test, y_train, y_test = None, None, None, None
-
-    if pd.api.types.is_numeric_dtype(y):
+    if pd.api.types.is_numeric_dtype(y) and X_numeric.shape[1] > 0:
         labels = ["Low", "Medium", "High"]
         try:
             y_bins = pd.qcut(y, q=len(labels), labels=labels)
@@ -87,20 +90,22 @@ if uploaded_file:
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels, ax=ax2)
         ax2.set_title("Confusion Matrix")
         st.pyplot(fig2)
-
     else:
         st.warning("Target column must be numeric for classification.")
 
     # -------------------
     # Correlation Heatmap
     # -------------------
-    fig3, ax3 = plt.subplots()
-    sns.heatmap(X_numeric.corr(), annot=True, cmap="coolwarm", ax=ax3)
-    ax3.set_title("Correlation Heatmap (Numeric Features)")
-    st.pyplot(fig3)
+    if X_numeric.shape[1] > 0:
+        fig3, ax3 = plt.subplots()
+        sns.heatmap(X_numeric.corr(), annot=True, cmap="coolwarm", ax=ax3)
+        ax3.set_title("Correlation Heatmap (Numeric Features)")
+        st.pyplot(fig3)
+    else:
+        st.warning("No numeric columns available for correlation heatmap.")
 
 # -------------------
-# Upload Document (TXT, DOCX, PDF) for Market Access / Yield
+# Upload External Document (TXT, DOCX, PDF) for Market/Yield Analysis
 # -------------------
 st.header("Upload External Document for Market/Yield Analysis")
 doc_file = st.file_uploader("Upload a document (TXT, DOCX, PDF)", type=["txt", "docx", "pdf"])
