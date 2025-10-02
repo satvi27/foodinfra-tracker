@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -50,7 +51,12 @@ if uploaded_file:
     # Classification
     try:
         X = df.iloc[:, :-1]
-        y = pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        y = df.iloc[:, -1]
+
+        # Convert target to numeric codes if not numeric
+        if y.dtype == 'object':
+            y = y.astype('category').cat.codes
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
         tree = DecisionTreeClassifier().fit(X_train, y_train)
         acc = accuracy_score(y_test, tree.predict(X_test))
@@ -63,8 +69,9 @@ if uploaded_file:
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax2)
         ax2.set_title("Confusion Matrix")
         st.pyplot(fig2)
-    except:
-        st.info("Target column must be numeric for classification.")
+
+    except Exception as e:
+        st.info(f"Classification error. Make sure the target column is numeric or categorical. Details: {e}")
 
     # Correlation Heatmap
     if numeric_cols.shape[1] >= 2:
